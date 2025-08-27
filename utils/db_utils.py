@@ -1,7 +1,22 @@
 import os
 import sqlite3
 
-from func_timeout import func_set_timeout, FunctionTimedOut
+# ``func_timeout`` provides handy decorators to enforce time limits on
+# SQL execution. The package might be absent in minimal runtime
+# environments (e.g., CI systems without internet access). In that case we
+# fall back to no-op implementations so that the surrounding code can
+# still execute without failing at import time.
+try:  # pragma: no cover - best effort import
+    from func_timeout import func_set_timeout, FunctionTimedOut  # type: ignore
+except Exception:  # pragma: no cover - fallback used when dependency missing
+    def func_set_timeout(_timeout):  # noqa: D401 - simple pass-through decorator
+        def decorator(func):
+            return func
+
+        return decorator
+
+    class FunctionTimedOut(Exception):
+        pass
 
 # get the database cursor for a sqlite database path
 def get_cursor_from_path(sqlite_path):

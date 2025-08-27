@@ -62,68 +62,17 @@ def build_content_index(db_path, index_path):
     os.remove("./data/temp_db_index/contents.json")
 
 if __name__ == "__main__":
-    print("build content index for BIRD's training set databases...")
-    remove_contents_of_a_folder("./data/sft_data_collections/bird/train/db_contents_index")
-    # build content index for BIRD's training set databases
-    for db_id in os.listdir("./data/sft_data_collections/bird/train/train_databases"):
-        if db_id.endswith(".json"):
-            continue
-        print(db_id)
-        build_content_index(
-            os.path.join("./data/sft_data_collections/bird/train/train_databases/", db_id, db_id + ".sqlite"),
-            os.path.join("./data/sft_data_collections/bird/train/db_contents_index/", db_id)
-        )
-    
+    """Build content indices for BIRD dev databases only."""
     print("build content index for BIRD's dev set databases...")
-    remove_contents_of_a_folder("./data/sft_data_collections/bird/dev/db_contents_index")
-    # build content index for BIRD's dev set databases
-    for db_id in os.listdir("./data/sft_data_collections/bird/dev/dev_databases"):
-        print(db_id)
-        build_content_index(
-            os.path.join("./data/sft_data_collections/bird/dev/dev_databases/", db_id, db_id + ".sqlite"),
-            os.path.join("./data/sft_data_collections/bird/dev/db_contents_index/", db_id)
-        )
-
-    print("build content index for spider's databases...")
-    remove_contents_of_a_folder("./data/sft_data_collections/spider/db_contents_index")
-    # build content index for spider's databases
-    for db_id in os.listdir("./data/sft_data_collections/spider/database"):
-        print(db_id)
-        build_content_index(
-            os.path.join("./data/sft_data_collections/spider/database/", db_id, db_id + ".sqlite"),
-            os.path.join("./data/sft_data_collections/spider/db_contents_index/", db_id)
-        )
-    
-    print("build content index for Dr.Spider's 17 perturbation test sets...")
-    # build content index for Dr.Spider's 17 perturbation test sets
-    test_set_names = os.listdir("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data")
-    test_set_names.remove("Spider-dev")
-    for test_set_name in test_set_names:
-        if test_set_name.startswith("DB_"):
-            remove_contents_of_a_folder(os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "db_contents_index"))
-            for db_id in os.listdir(os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "database_post_perturbation")):
-                print(db_id)
-                build_content_index(
-                    os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "database_post_perturbation", db_id, db_id + ".sqlite"),
-                    os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "db_contents_index", db_id)
-                )
-        else:
-            remove_contents_of_a_folder(os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "db_contents_index"))
-            for db_id in os.listdir(os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "databases")):
-                if db_id in ["README.md", "database_original"]:
-                    continue
-                print(db_id)
-                build_content_index(
-                    os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "databases", db_id, db_id + ".sqlite"),
-                    os.path.join("./data/sft_data_collections/diagnostic-robustness-text-to-sql/data/", test_set_name, "db_contents_index", db_id)
-                )
-    
-    print("build content index for Bank_Financials and Aminer_Simplified training set databases...")
-    remove_contents_of_a_folder("./data/sft_data_collections/domain_datasets/db_contents_index")
-    # build content index for Bank_Financials's training set databases
-    for db_id in os.listdir("./data/sft_data_collections/domain_datasets/databases"):
-        print(db_id)
-        build_content_index(
-            os.path.join("./data/sft_data_collections/domain_datasets/databases/", db_id, db_id + ".sqlite"),
-            os.path.join("./data/sft_data_collections/domain_datasets/db_contents_index/", db_id)
-        )
+    db_root = "./data/sft_data_collections/bird/dev/dev_databases"
+    index_root = "./data/sft_data_collections/bird/dev/db_contents_index"
+    if not os.path.exists(db_root):
+        print(f"Database directory not found at {db_root}, skipping indexing.")
+    else:
+        remove_contents_of_a_folder(index_root)
+        for db_id in os.listdir(db_root):
+            print(db_id)
+            build_content_index(
+                os.path.join(db_root, db_id, db_id + ".sqlite"),
+                os.path.join(index_root, db_id)
+            )

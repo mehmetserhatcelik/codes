@@ -75,8 +75,12 @@ if __name__ == "__main__":
 
     # TODO: current, we only support batch size = 1
     dataloader = DataLoader(eval_set, batch_size = 1)
-    model = AutoModelForCausalLM.from_pretrained(opt.llm_path, device_map = "auto", torch_dtype = torch.float16)
-    
+    model = AutoModelForCausalLM.from_pretrained(
+        opt.llm_path,
+        device_map="auto",
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True
+    )    
     model.eval()
     start_time = time.time()
     predicted_sqls = []

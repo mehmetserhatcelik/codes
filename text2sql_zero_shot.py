@@ -21,6 +21,7 @@ def parse_option():
 
     parser.add_argument('--max_tokens', type = int, default = 4096)
     parser.add_argument('--max_new_tokens', type = int, default = 256)
+    parser.add_argument('--load_in_8bit', action='store_true', help='Load model in 8-bit (bitsandbytes) to save memory')
     
     opt = parser.parse_args()
 
@@ -75,12 +76,20 @@ if __name__ == "__main__":
 
     # TODO: current, we only support batch size = 1
     dataloader = DataLoader(eval_set, batch_size = 1)
-    model = AutoModelForCausalLM.from_pretrained(
-        opt.llm_path,
-        device_map="auto",
-        torch_dtype=torch.float16,
-        low_cpu_mem_usage=True
-    )    
+    if opt.load_in_8bit:
+        model = AutoModelForCausalLM.from_pretrained(
+            opt.llm_path,
+            device_map="auto",
+            load_in_8bit=True,
+            low_cpu_mem_usage=True
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            opt.llm_path,
+            device_map="auto",
+            torch_dtype=torch.float16,
+            low_cpu_mem_usage=True
+        )    
     model.eval()
     start_time = time.time()
     predicted_sqls = []

@@ -23,6 +23,8 @@ def parse_option():
     parser.add_argument('--max_new_tokens', type = int, default = 256)
     parser.add_argument('--load_in_8bit', action='store_true', help='Load model in 8-bit (bitsandbytes) to save memory')
     parser.add_argument('--force_gpu', action='store_true', help='Force map entire model to cuda:0 to avoid CPU offload')
+    parser.add_argument('--num_return_sequences', type = int, default = 8, help='Number of SQL candidates to generate per question')
+    parser.add_argument('--skip_eval', action='store_true', help='Skip evaluation and only write predictions.json with candidates')
     
     opt = parser.parse_args()
 
@@ -40,15 +42,15 @@ def post_process(sql, schema_items):
 
     return sql
 
-def text2sql_func(model, inputs, tokenizer, max_new_tokens):
+def text2sql_func(model, inputs, tokenizer, max_new_tokens, num_return_sequences):
     input_length = inputs["input_ids"].shape[1]
     
     with torch.no_grad():
         generate_ids = model.generate(
             **inputs,
             max_new_tokens = max_new_tokens,
-            num_beams = 4,
-            num_return_sequences = 4
+            num_beams = num_return_sequences,
+            num_return_sequences = num_return_sequences
         )
 
     # print(tokenizer.decode(generate_ids[0]))
@@ -62,6 +64,7 @@ if __name__ == "__main__":
     print(opt)
     max_tokens = opt.max_tokens
     max_new_tokens = opt.max_new_tokens
+    num_return_sequences = opt.num_return_sequences
 
     tokenizer = AutoTokenizer.from_pretrained(opt.llm_path)
     raw_dataset = json.load(open(opt.dataset_path))
@@ -96,10 +99,11 @@ if __name__ == "__main__":
     model.eval()
     start_time = time.time()
     predicted_sqls = []
+    results_with_candidates = dict()
     for raw_data, batch_data in tqdm(zip(raw_dataset, dataloader)):
         for key in batch_data:
             batch_data[key] = batch_data[key].to(model.device)
-        generated_sqls = text2sql_func(model, batch_data, tokenizer, max_new_tokens)
+        generated_sqls = text2sql_func(model, batch_data, tokenizer, max_new_tokens, num_return_sequences)
         generated_sqls = [post_process(generated_sql, raw_data["schema"]["schema_items"]) for generated_sql in generated_sqls]
 
         final_generated_sql = None
@@ -114,9 +118,22 @@ if __name__ == "__main__":
                 final_generated_sql = generated_sqls[0]
             else:
                 final_generated_sql = "SQL placeholder"
-        
+        # Ensure the first candidate is the chosen prediction
+        candidates = list(generated_sqls)
+        if final_generated_sql in candidates:
+            first_idx = candidates.index(final_generated_sql)
+            if first_idx != 0:
+                candidates[0], candidates[first_idx] = candidates[first_idx], candidates[0]
+        else:
+            candidates = [final_generated_sql] + candidates
+            candidates = candidates[:num_return_sequences]
+
         print(final_generated_sql)
         predicted_sqls.append(final_generated_sql)
+        results_with_candidates[str(len(predicted_sqls) - 1)] = {
+            "prediction": final_generated_sql,
+            "candidates": candidates
+        }
     end_time = time.time()
     print("LLM name: {} | Total time: {}s | Example number: {} | Average time: {}s".format(
         opt.llm_path, 
@@ -126,8 +143,14 @@ if __name__ == "__main__":
         )
     )
 
+    # Always write predictions with candidates in the requested format
+    with open("predictions.json", "w", encoding='utf-8') as f:
+        f.write(json.dumps(results_with_candidates, indent = 2, ensure_ascii = False))
+
     print("LLM name:", opt.llm_path)
-    if "bird" in opt.dataset_path:
+    if opt.skip_eval:
+        print("Skipping evaluation as per --skip_eval. Wrote predictions.json with candidates.")
+    elif "bird" in opt.dataset_path:
         bird_results_dict = dict()
         for idx, (data, predicted_sql) in enumerate(zip(raw_dataset, predicted_sqls)):
             bird_results_dict[idx] = predicted_sql + "\t----- bird -----\t" + data["db_id"]

@@ -25,6 +25,8 @@ def parse_option():
 
     parser.add_argument('--max_tokens', type = int)
     parser.add_argument('--max_new_tokens', type = int)
+    parser.add_argument('--num_return_sequences', type = int, default = 16, help='Number of SQL candidates to generate per question')
+    parser.add_argument('--skip_eval', action='store_true', help='Skip evaluation and only write predictions.json with candidates')
 
     opt = parser.parse_args()
 
@@ -116,7 +118,7 @@ def prepare_cross_domain_input_seq(opt, eval_data, demonstration_set, similarity
 
     return input_seq
 
-def text2sql_func(model, text2sql_input_seq, tokenizer, max_tokens, max_new_tokens, eos_token_id):
+def text2sql_func(model, text2sql_input_seq, tokenizer, max_tokens, max_new_tokens, eos_token_id, num_return_sequences):
     inputs = prepare_input_ids_and_attention_mask(
         tokenizer, 
         text2sql_input_seq, 
@@ -132,8 +134,8 @@ def text2sql_func(model, text2sql_input_seq, tokenizer, max_tokens, max_new_toke
         generate_ids = model.generate(
             **inputs,
             max_new_tokens = max_new_tokens,
-            num_beams = 4,
-            num_return_sequences = 4,
+            num_beams = num_return_sequences,
+            num_return_sequences = num_return_sequences,
             use_cache = True,
             eos_token_id = eos_token_id
         )
@@ -202,18 +204,21 @@ if __name__ == "__main__":
 
     max_tokens = opt.max_tokens
     max_new_tokens = opt.max_new_tokens
+    num_return_sequences = opt.num_return_sequences
 
     print("max_tokens:", max_tokens)
     print("max_new_tokens:", max_new_tokens)
+    print("num_return_sequences:", num_return_sequences)
 
     predicted_sqls = []
+    results_with_candidates = dict()
     for eval_data_idx, eval_data in tqdm(enumerate(eval_set)):
         input_seq = prepare_cross_domain_input_seq(opt, eval_data, demonstration_set, similarities[eval_data_idx])
     
         if eval_data_idx < 2:
             print(input_seq)
         
-        generated_sqls = text2sql_func(model, input_seq, tokenizer, max_tokens, max_new_tokens, new_eos_token_id)
+        generated_sqls = text2sql_func(model, input_seq, tokenizer, max_tokens, max_new_tokens, new_eos_token_id, num_return_sequences)
         generated_sqls = [post_process(generated_sql, eval_data["schema"]["schema_items"]) for generated_sql in generated_sqls]
         
         final_generated_sql = None
@@ -229,11 +234,31 @@ if __name__ == "__main__":
             else:
                 final_generated_sql = "SQL placeholder"
         
+        # Ensure the first candidate is the chosen prediction
+        candidates = list(generated_sqls)
+        if final_generated_sql in candidates:
+            first_idx = candidates.index(final_generated_sql)
+            if first_idx != 0:
+                candidates[0], candidates[first_idx] = candidates[first_idx], candidates[0]
+        else:
+            candidates = [final_generated_sql] + candidates
+            candidates = candidates[:num_return_sequences]
+
         print(final_generated_sql)
         predicted_sqls.append(final_generated_sql)
+        results_with_candidates[str(len(predicted_sqls) - 1)] = {
+            "prediction": final_generated_sql,
+            "candidates": candidates
+        }
+
+    # Always write predictions with candidates in the requested format
+    with open("predictions.json", "w", encoding='utf-8') as f:
+        f.write(json.dumps(results_with_candidates, indent = 2, ensure_ascii = False))
 
     print("LLM name:", opt.llm_path)
-    if "bird" in opt.dataset_path:
+    if opt.skip_eval:
+        print("Skipping evaluation as per --skip_eval. Wrote predictions.json with candidates.")
+    elif "bird" in opt.dataset_path:
         bird_results_dict = dict()
         for idx, (data, predicted_sql) in enumerate(zip(eval_set, predicted_sqls)):
             bird_results_dict[idx] = predicted_sql + "\t----- bird -----\t" + data["db_id"]

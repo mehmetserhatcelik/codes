@@ -23,7 +23,7 @@ def parse_option():
     parser.add_argument('--max_new_tokens', type = int, default = 256)
     parser.add_argument('--load_in_8bit', action='store_true', help='Load model in 8-bit (bitsandbytes) to save memory')
     parser.add_argument('--force_gpu', action='store_true', help='Force map entire model to cuda:0 to avoid CPU offload')
-    parser.add_argument('--num_return_sequences', type = int, default = 32, help='Number of SQL candidates to generate per question')
+    parser.add_argument('--num_return_sequences', type = int, default = 8, help='Number of SQL candidates to generate per question')
     parser.add_argument('--skip_eval', action='store_true', help='Skip evaluation and only write predictions.json with candidates')
     
     opt = parser.parse_args()

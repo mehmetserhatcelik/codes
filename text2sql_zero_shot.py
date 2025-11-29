@@ -59,6 +59,22 @@ def text2sql_func(model, inputs, tokenizer, max_new_tokens, num_return_sequences
 
     return generated_sqls
 
+def text2sql_func_single(model, inputs, tokenizer, max_new_tokens):
+    """Generate only the first SQL using greedy decoding"""
+    input_length = inputs["input_ids"].shape[1]
+    
+    with torch.no_grad():
+        generate_ids = model.generate(
+            **inputs,
+            max_new_tokens = max_new_tokens,
+            num_beams = 1,
+            num_return_sequences = 1
+        )
+
+    generated_sql = tokenizer.batch_decode(generate_ids[:, input_length:], skip_special_tokens = True, clean_up_tokenization_spaces = False)[0]
+
+    return generated_sql
+
 if __name__ == "__main__":
     opt = parse_option()
     print(opt)
@@ -104,10 +120,13 @@ if __name__ == "__main__":
         for key in batch_data:
             batch_data[key] = batch_data[key].to(model.device)
         
-        # Measure generation time for each SQL
+        # Measure generation time for the first SQL only (greedy decode)
         generation_start_time = time.time()
+        first_sql = text2sql_func_single(model, batch_data, tokenizer, max_new_tokens)
+        first_generation_time = time.time() - generation_start_time
+        
+        # Generate all candidates with beam search
         generated_sqls = text2sql_func(model, batch_data, tokenizer, max_new_tokens, num_return_sequences)
-        generation_time = time.time() - generation_start_time
         
         generated_sqls = [post_process(generated_sql, raw_data["schema"]["schema_items"]) for generated_sql in generated_sqls]
 
@@ -138,7 +157,7 @@ if __name__ == "__main__":
         results_with_candidates[str(len(predicted_sqls) - 1)] = {
             "prediction": final_generated_sql,
             "candidates": candidates,
-            "generation_time": round(generation_time, 4)  # Time in seconds, rounded to 4 decimal places
+            "generation_time": round(first_generation_time, 4)  # Time in seconds to generate the first SQL only
         }
     end_time = time.time()
     print("LLM name: {} | Total time: {}s | Example number: {} | Average time: {}s".format(

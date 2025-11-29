@@ -103,7 +103,12 @@ if __name__ == "__main__":
     for raw_data, batch_data in tqdm(zip(raw_dataset, dataloader)):
         for key in batch_data:
             batch_data[key] = batch_data[key].to(model.device)
+        
+        # Measure generation time for each SQL
+        generation_start_time = time.time()
         generated_sqls = text2sql_func(model, batch_data, tokenizer, max_new_tokens, num_return_sequences)
+        generation_time = time.time() - generation_start_time
+        
         generated_sqls = [post_process(generated_sql, raw_data["schema"]["schema_items"]) for generated_sql in generated_sqls]
 
         final_generated_sql = None
@@ -132,7 +137,8 @@ if __name__ == "__main__":
         predicted_sqls.append(final_generated_sql)
         results_with_candidates[str(len(predicted_sqls) - 1)] = {
             "prediction": final_generated_sql,
-            "candidates": candidates
+            "candidates": candidates,
+            "generation_time": round(generation_time, 4)  # Time in seconds, rounded to 4 decimal places
         }
     end_time = time.time()
     print("LLM name: {} | Total time: {}s | Example number: {} | Average time: {}s".format(
